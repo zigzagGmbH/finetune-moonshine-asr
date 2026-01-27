@@ -503,8 +503,10 @@ If you use this guide or the fine-tuned model in your research, please cite:
 ## Contact
 
 For questions or issues:
-- Open a [GitHub Discussion](https://github.com/pierre-cheneau/finetune-moonshine-asr/discussions)
-- Join our [Discord](https://discord.gg/zE4NRsTGdw) (Hogwarts Legacy Spell Recognition project's discord)
+- Website: [pcheneau.fr](https://pcheneau.fr)
+- Github: [@pierre-cheneau](https://github.com/pierre-cheneau)
+- HuggingFace: [@Cornebidouil](https://huggingface.co/Cornebidouil)
+- Discord: [HogwartsLegacySpellCaster](https://discord.gg/zE4NRsTGdw) (Hogwarts Legacy Spell Recognition project's discord)
 ---
 
 **Made with ❤️ for the ASR community**
