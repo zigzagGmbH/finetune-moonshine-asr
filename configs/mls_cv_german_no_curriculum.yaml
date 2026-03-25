@@ -1,0 +1,93 @@
+# ============================================================
+# German Moonshine fine-tuning — MLS + Common Voice combined
+# Target server: ziggie (RTX 5090, 32 GB VRAM)
+# ============================================================
+# Based on Pierre Chéneau's French config, adapted for:
+#   - German language (combined MLS + CV dataset)
+#   - Larger GPU (batch 16 vs 4, bf16 vs fp16)
+#   - No curriculum (simple first run)
+#
+# Dataset prepared by: prepare_german_dataset.py
+# Expected: ~400-550k train / ~10-15k test (after 4-20s filter)
+
+model:
+  name: "UsefulSensors/moonshine-tiny"
+  freeze_encoder: false  # Train full model for new language
+
+dataset:
+  type: "local"
+  path: "./data/german_combined"
+  text_column: "sentence"
+
+audio:
+  sampling_rate: 16000
+  max_duration: 20.0   # Upper bound (already filtered in prep)
+  min_duration: 4.0    # Moonshine paper minimum
+
+preprocessing:
+  num_proc: 8          # ziggie has plenty of CPU cores
+  normalize_audio: true
+  target_rms: 0.075
+
+curriculum:
+  enabled: false       # Simple first run; add later if needed
+
+training:
+  output_dir: "./results-moonshine-de"
+
+  # ---- Batch / accumulation ----
+  # RTX 5090 32 GB → much more room than Pierre's RTX 2060 6 GB
+  per_device_train_batch_size: 16     # (Pierre: 4)
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 4      # effective batch = 16 × 4 = 64
+  gradient_checkpointing: true        # still useful to save VRAM headroom
+  bf16: true                          # 5090 has native bf16 (better than fp16)
+  bf16_full_eval: true
+  group_by_length: true
+  length_column_name: "input_length"
+  max_grad_norm: 1.0
+
+  # ---- Training length ----
+  # Combined dataset ≈ 400-550k samples → 1 epoch ≈ 6k-8.5k steps (batch 64)
+  # Start with 10 000 steps (~1.2-1.7 epochs) — enough to see convergence
+  max_steps: 10000
+
+  # ---- Optimizer ----
+  # Same as Pierre's proven setup: schedule-free AdamW + warmup
+  optim: "schedule_free_adamw"
+  learning_rate: 3.0e-4
+  lr_scheduler_type: "constant_with_warmup"
+  warmup_steps: 300
+
+  # ---- Evaluation & saving ----
+  eval_strategy: "steps"
+  eval_steps: 1000          # Eval every 1k steps (bigger dataset → less freq)
+  save_steps: 1000
+  logging_steps: 50
+  predict_with_generate: true
+
+  # ---- Best model selection ----
+  load_best_model_at_end: true
+  metric_for_best_model: "wer"
+  greater_is_better: false
+
+  # ---- Logging ----
+  report_to: ["tensorboard"]
+  logging_dir: "./logs/moonshine-de-no-curriculum"
+
+  # ---- Hub (off for now) ----
+  push_to_hub: false
+  hub_model_id: null
+  hub_strategy: "every_save"
+  hub_token: null
+
+generation:
+  max_new_tokens: 80        # German words are longer → slightly more tokens
+  length_penalty: 1.2
+  do_sample: false
+  early_stopping: true
+  repetition_penalty: 1.3
+  num_beams: 5
+  no_repeat_ngram_size: 2
+
+
