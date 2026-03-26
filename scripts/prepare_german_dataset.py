@@ -247,12 +247,12 @@ def main():
     combined_train = combined_train.map(
         compute_duration,
         desc="Computing train durations",
-        num_proc=4,
+        num_proc=8,
     )
     combined_test = combined_test.map(
         compute_duration,
         desc="Computing test durations",
-        num_proc=4,
+        num_proc=8,
     )
 
     # --------------------------------------------------

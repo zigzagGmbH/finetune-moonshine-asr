@@ -16,7 +16,7 @@ model:
 
 dataset:
   type: "local"
-  path: "./data/german_combined"
+  path: "/storage/datasets/german_combined"
   text_column: "sentence"
 
 audio:
