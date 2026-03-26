@@ -100,3 +100,5 @@ coverage.xml
 # PyInstaller
 *.manifest
 *.spec
+
+contexts/*

@@ -1,5 +1,5 @@
 # ============================================================
-# German Moonshine — Phase 2: Resume training from 10k steps
+# German Moonshine — Phase 2: Resume training from 10k checkpoint
 # Target: WER < 25% (currently 36.7%)
 # ============================================================
 # USAGE:
@@ -7,16 +7,26 @@
 #       --config configs/german_resume_v2.yaml \
 #       --resume /data/results-moonshine-de/final
 #
-# This resumes from the 10k-step model and trains to 30k total steps.
-# Key changes from v1:
-#   - Lower learning rate (1e-4 vs 3e-4) — model already learned basics
-#   - Longer warmup (500 steps) — gentler restart
-#   - 30k total steps (~4 epochs) — loss was still dropping at 10k
-#   - More frequent eval (every 500 steps) — catch the sweet spot
-#   - Saves to /data/results-moonshine-de-v2/
+# HOW --resume WORKS:
+#   - Loads model WEIGHTS from checkpoint (German knowledge preserved)
+#   - Optimizer state is NOT restored (starts fresh)
+#   - Step counter starts at 0 (max_steps = NEW steps, not total)
+#   - Encoded dataset is re-saved (symlink avoids disk duplication)
 #
-# Expected timeline: ~20k new steps × ~3.5s/step ≈ ~19 hours on RTX 5090
-# (May finish faster — first run was 10k steps in 9.7h)
+# RATIONALE:
+#   v1: 10k steps, LR 3e-4, loss 1.61, WER 36.7% — loss still dropping
+#   Pierre: 8k steps with 60k samples (~8.5 epochs) → 21.8% WER
+#   We did: 10k steps with 470k samples (~1.36 epochs) — clearly undercooked
+#   This run: 20k more steps (~2.7 more epochs, ~4.1 total)
+#
+#   LR 3e-4 (same as v1): schedule-free AdamW adapts automatically.
+#   The model weights encode learned knowledge; optimizer restarts clean.
+#   Pierre proved 3e-4 works for moonshine-tiny fine-tuning.
+#   Dropping to 1e-4 would learn 3x slower — wasteful.
+#
+# EXPECTED:
+#   Time: ~20k steps × 3.5s/step ≈ ~19 hours
+#   WER target: ~28-32% (meaningful improvement; <25% may need curriculum)
 
 model:
   name: "UsefulSensors/moonshine-tiny"
@@ -43,11 +53,11 @@ curriculum:
 training:
   output_dir: "/data/results-moonshine-de-v2"
 
-  # ---- Batch (same as v1 — proven to work) ----
+  # ---- Batch (identical to v1 — proven) ----
   per_device_train_batch_size: 16
   per_device_eval_batch_size: 16
   gradient_accumulation_steps: 4      # effective batch = 64
-  gradient_checkpointing: false       # broken with Moonshine
+  gradient_checkpointing: false       # broken with Moonshine in transformers 4.49
   bf16: true
   fp16: false
   bf16_full_eval: true
@@ -57,22 +67,24 @@ training:
   max_grad_norm: 1.0
 
   # ---- Training length ----
-  # Resume from 10k → train to 30k total (~4 epochs)
-  # Loss was 1.61 and still slowly dropping at 10k
-  max_steps: 30000
+  # 20k NEW steps (step counter resets to 0 with --resume)
+  # 470k samples / 64 batch = ~7,350 steps per epoch
+  # 20k steps = ~2.7 epochs → total ~4.1 epochs (including v1's 1.36)
+  max_steps: 20000
 
   # ---- Optimizer ----
-  # Lower LR for continued training — model already has German basics
-  # Schedule-free AdamW adapts automatically, but starting lower helps
+  # KEEP 3e-4 (same as v1 — proven, loss was still dropping)
+  # Schedule-free AdamW adapts; model weights carry the knowledge
+  # Lower LR only wastes GPU hours
   optim: "schedule_free_adamw"
-  learning_rate: 1.0e-4               # v1 was 3e-4 — reduce for fine-tuning phase
+  learning_rate: 3.0e-4
   lr_scheduler_type: "constant_with_warmup"
-  warmup_steps: 500                   # Gentle restart after loading checkpoint
+  warmup_steps: 300                   # Same as v1 — optimizer starts fresh anyway
 
   # ---- Evaluation & saving ----
   eval_strategy: "steps"
-  eval_steps: 500                     # More frequent than v1 (was 1000)
-  save_steps: 1000                    # Save every 1k steps
+  eval_steps: 500                     # Frequent — watch the WER curve
+  save_steps: 2000                    # Every ~2h, save checkpoint
   logging_steps: 50
   predict_with_generate: true
 
