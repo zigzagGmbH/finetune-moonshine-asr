@@ -901,7 +901,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.3" },
     { name = "onnx", specifier = ">=1.20.1" },
     { name = "onnxruntime", specifier = ">=1.24.4" },
-    { name = "optimum", specifier = ">=2.1.0" },
+    { name = "optimum", extras = ["exporters"], specifier = ">=2.1.0" },
     { name = "pandas", specifier = ">=3.0.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "schedulefree", specifier = ">=1.4.1" },
