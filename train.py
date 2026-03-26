@@ -546,8 +546,10 @@ def main():
 
         # Memory optimization
         gradient_checkpointing=train_config['gradient_checkpointing'],
-        fp16=train_config['fp16'],
-        fp16_full_eval=train_config.get('fp16_full_eval', True),
+        fp16=train_config.get("fp16", False),
+        bf16=train_config.get("bf16", False),
+        fp16_full_eval=train_config.get("fp16_full_eval", False),
+        bf16_full_eval=train_config.get("bf16_full_eval", False),
 
         # Evaluation
         eval_strategy=train_config['eval_strategy'],
