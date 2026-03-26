@@ -7,7 +7,7 @@ Supports batch processing, GPU acceleration, live transcription, ONNX Runtime (s
 
 Usage:
     # Single file (PyTorch)
-    python inference.py --model ./results-moonshine-fr-no-curriculum/final --audio sample.wav
+    python inference.py --model ././model --audio sample.wav
 
     # ONNX Runtime (super fast!)
     python inference.py --model ./model-onnx --audio sample.wav --onnx
@@ -16,7 +16,7 @@ Usage:
     python inference.py --model ./model-onnx --audio sample.wav --use-manual-onnx
 
     # Directory of files
-    python inference.py --model ./results-moonshine-fr-no-curriculum/final --audio ./test_audio/ --output ./transcriptions.json
+    python inference.py --model ././model --audio ./test_audio/ --output ./transcriptions.json
 
     # Live transcription from microphone
     python inference.py --model ./model --live
@@ -412,7 +412,7 @@ class MoonshineInference:
 
         # Calculate max_new_tokens based on audio duration if not provided
         if max_new_tokens is None:
-            # Roughly 5 tokens per second (accounting for French verbosity)
+            # Roughly 5 tokens per second
             # Min 10 tokens, max 150 tokens
             max_new_tokens = max(10, min(int(audio_duration * 5), 150))
 
@@ -660,7 +660,7 @@ def main():
         epilog="""
 Examples:
   # Single file
-  python inference.py --model ./results-moonshine-fr/final --audio sample.wav
+  python inference.py --model ././model --audio sample.wav
 
   # Directory of files
   python inference.py --model ./model --audio ./test_audio/ --output results.json

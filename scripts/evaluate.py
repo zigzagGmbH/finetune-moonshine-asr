@@ -7,8 +7,8 @@ on test datasets.
 
 Usage:
     # Evaluate on HuggingFace dataset
-    python evaluate.py --model ./results-moonshine-fr/final \\
-        --dataset ./data/mls_french_split --split test
+    python evaluate.py --model ././model \\
+        --dataset ./data/dataset --split test
 
     # Evaluate on local dataset with specific column names
     python evaluate.py --model ./model --dataset ./data/test \\
@@ -159,7 +159,7 @@ class MoonshineEvaluator:
             input_values = input_values.half()
 
         # Calculate max tokens based on audio duration
-        # Roughly 5 tokens per second (accounting for French verbosity)
+        # Roughly 5 tokens per second
         audio_duration = len(audio_array) / sampling_rate
         max_new_tokens = max(10, min(int(audio_duration * 5), 150))
 
@@ -290,8 +290,8 @@ def main():
         epilog="""
 Examples:
   # Evaluate on local dataset
-  python evaluate.py --model ./results-moonshine-fr/final \\
-      --dataset ./data/mls_french_split --split test
+  python evaluate.py --model ././model \\
+      --dataset ./data/dataset --split test
 
   # Custom column names
   python evaluate.py --model ./model --dataset ./data/test \\

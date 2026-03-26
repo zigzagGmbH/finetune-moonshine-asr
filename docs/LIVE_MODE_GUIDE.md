@@ -281,7 +281,7 @@ class CustomLiveTranscriber(LiveTranscriber):
 - **No punctuation restoration** - Model outputs raw transcription
 - **No speaker diarization** - Single speaker assumed
 - **No timestamp alignment** - Character-level timing not available
-- **French language only** - Current model fine-tuned for French
+- **Language depends on fine-tuned model** - Current German model: dattazigzag/moonshine-tiny-de
 
 ---
 

@@ -6,13 +6,7 @@ Fine-tuning [UsefulSensors/moonshine-tiny](https://huggingface.co/UsefulSensors/
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![HuggingFace Model](https://img.shields.io/badge/🤗-moonshine--tiny--de-yellow)](https://huggingface.co/dattazigzag/moonshine-tiny-de)
 
-## Overview
-
-This is a fork of [pierre-cheneau/finetune-moonshine-asr](https://github.com/pierre-cheneau/finetune-moonshine-asr) adapted for **German language** fine-tuning on an NVIDIA RTX 5090. The original toolkit provides curriculum learning, schedule-free optimization, and production-ready inference scripts for Moonshine ASR.
-
-**Our contribution:** a German fine-tuning pipeline using MLS German data, RTX 5090-optimized config, and patches for bf16 training + dual-GPU compatibility issues.
-
-### Results
+## Results
 
 | Metric | Value |
 |--------|-------|
@@ -24,9 +18,15 @@ This is a fork of [pierre-cheneau/finetune-moonshine-asr](https://github.com/pie
 
 For reference: Pierre achieved 21.8% WER on French with 60k samples at 8k steps using curriculum learning. Our first run used 8× more data but no curriculum — there's room to improve.
 
-## Pre-trained German Model
+## Use the Pre-Trained German Model
 
-**[dattazigzag/moonshine-tiny-de](https://huggingface.co/dattazigzag/moonshine-tiny-de)** — ready to use:
+### Install
+
+```bash
+pip install transformers torch torchaudio
+```
+
+### Transcribe a file
 
 ```python
 from transformers import pipeline
@@ -36,57 +36,126 @@ result = transcriber("german_audio.wav")
 print(result["text"])
 ```
 
-## Quick Start: Fine-Tune Your Own
+### Transcribe from code
+
+```python
+from transformers import AutoProcessor, MoonshineForConditionalGeneration
+import torch, torchaudio
+
+model = MoonshineForConditionalGeneration.from_pretrained("dattazigzag/moonshine-tiny-de")
+processor = AutoProcessor.from_pretrained("dattazigzag/moonshine-tiny-de")
+model.eval()
+
+waveform, sr = torchaudio.load("german_audio.wav")
+if sr != 16000:
+    waveform = torchaudio.transforms.Resample(sr, 16000)(waveform)
+
+inputs = processor(waveform.squeeze().numpy(), sampling_rate=16000, return_tensors="pt")
+with torch.no_grad():
+    ids = model.generate(**inputs, max_new_tokens=80)
+print(processor.tokenizer.decode(ids[0], skip_special_tokens=True))
+```
+
+### Inference with the repo scripts
 
 ```bash
-# Clone
 git clone https://github.com/zigzagGmbH/finetune-moonshine-asr.git
-cd finetune-moonshine-asr
+cd finetune-moonshine-asr && uv sync
 
-# Install dependencies (uses uv)
-uv sync
+# Single file
+CUDA_VISIBLE_DEVICES=0 uv run python scripts/inference.py \
+    --model dattazigzag/moonshine-tiny-de \
+    --audio german_audio.wav
 
-# Prepare dataset (MLS German, ~1.1 TB decoded)
+# Batch (directory of WAVs)
+CUDA_VISIBLE_DEVICES=0 uv run python scripts/inference.py \
+    --model dattazigzag/moonshine-tiny-de \
+    --audio ./test_audio/ \
+    --output results.json
+
+# Live microphone transcription
+uv run python scripts/inference.py \
+    --model dattazigzag/moonshine-tiny-de \
+    --live
+
+# Evaluate WER on a dataset
+CUDA_VISIBLE_DEVICES=0 uv run python scripts/evaluate.py \
+    --model dattazigzag/moonshine-tiny-de \
+    --dataset /path/to/german_dataset \
+    --split test
+```
+
+## Fine-Tune Your Own
+
+### 1. Prepare data
+
+```bash
 uv run python scripts/prepare_german_dataset.py \
     --output /path/to/german_combined \
     --skip-cv
+```
 
-# Train (single GPU, bf16)
+### 2. Train
+
+```bash
 CUDA_VISIBLE_DEVICES=0 uv run python train.py \
     --config configs/mls_cv_german_no_curriculum.yaml
 ```
 
+### 3. Resume / train longer
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run python train.py \
+    --config configs/mls_cv_german_no_curriculum.yaml \
+    --resume /path/to/model/final \
+    --max-steps 20000
+```
+
+See [docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md) for the full guide (curriculum learning, hyperparameters, troubleshooting).
+
+## Scripts Reference
+
+| Script | Purpose | Status |
+|--------|---------|--------|
+| `train.py` | Main training script (patched for bf16) | ✅ Tested |
+| `scripts/prepare_german_dataset.py` | MLS German data prep | ✅ Tested |
+| `scripts/inference.py` | Single-file, batch, and live inference | ✅ Tested |
+| `scripts/evaluate.py` | WER/CER evaluation on test sets | ✅ Tested |
+| `scripts/convert_for_deployment.py` | ONNX/ORT export pipeline | Planned |
+| `scripts/extract_samples.py` | Extract audio samples from datasets | Available |
+| `scripts/checkpoint_to_dataset.py` | Convert checkpoints to HF datasets | Available |
+
+## Documentation
+
+| Doc | Content |
+|-----|---------|
+| [INSTALLATION.md](docs/INSTALLATION.md) | Setup with `uv`, pinned deps, GPU notes |
+| [TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md) | Full training guide, curriculum learning, troubleshooting |
+| [DATASET_PREPARATION.md](docs/DATASET_PREPARATION.md) | Data formats, quality checks, preprocessing |
+| [INFERENCE_GUIDE.md](docs/INFERENCE_GUIDE.md) | Inference, evaluation, and deployment scripts |
+| [LIVE_MODE_GUIDE.md](docs/LIVE_MODE_GUIDE.md) | Real-time microphone transcription with VAD |
+| [ONNX_MODE_GUIDE.md](docs/ONNX_MODE_GUIDE.md) | ONNX/ORT conversion for fast deployment |
+| [moonshine_de_context.md](contexts/moonshine_de_context.md) | Full project context, all gotchas, roadmap |
+
 ## What Changed from Pierre's Original
 
 ### New files
-- `scripts/prepare_german_dataset.py` — MLS German data preparation pipeline
-- `configs/mls_cv_german_no_curriculum.yaml` — RTX 5090 training config (bf16, batch 16)
-- `contexts/moonshine_de_context.md` — full project context, gotchas, and roadmap
+- `scripts/prepare_german_dataset.py` — MLS German data preparation
+- `configs/mls_cv_german_no_curriculum.yaml` — RTX 5090 config (bf16, batch 16)
+- `contexts/moonshine_de_context.md` — full project context and roadmap
 
 ### Patches to `train.py`
-- Safe config key access: `train_config.get("fp16", False)` / `train_config.get("bf16", False)` (Pierre's original hardcoded `train_config['fp16']`)
+- Safe config key access: `.get("fp16", False)` / `.get("bf16", False)`
 - bf16 training support alongside fp16
 
 ### Key gotchas documented
-- **`gradient_checkpointing` is broken** for Moonshine in transformers 4.49 (`bool` vs dict `is_updated` error) — set to `false`
-- **Dual GPU / DataParallel is broken** for Moonshine KV cache — always use `CUDA_VISIBLE_DEVICES=0`
-- **`datasets >= 4.0` breaks audio decoding** (switches to torchcodec) — pinned `< 4.0`
+- **`gradient_checkpointing` broken** for Moonshine in transformers 4.49
+- **Dual GPU / DataParallel broken** for Moonshine KV cache — use `CUDA_VISIBLE_DEVICES=0`
+- **`datasets >= 4.0` breaks audio decoding** — pinned `< 4.0`
 - **`transformers >= 4.50` removes training params** — pinned `< 4.50`
-- **Common Voice pulled from HuggingFace** (Oct 2025) — use `--skip-cv` flag
+- **Common Voice pulled from HuggingFace** (Oct 2025) — use `--skip-cv`
 
 Full details in [`contexts/moonshine_de_context.md`](contexts/moonshine_de_context.md).
-
-## Pinned Dependencies
-
-These versions are tested and working. Do not upgrade without testing:
-
-```
-datasets >= 2.14.0, < 4.0.0
-transformers >= 4.35.0, < 4.50.0
-torch >= 2.0.0  (tested with 2.11.0+cu130)
-```
-
-See `pyproject.toml` for the full list.
 
 ## Repository Structure
 
@@ -98,26 +167,18 @@ finetune-moonshine-asr/
 │   └── example_config.yaml              # Reference config with all options
 ├── scripts/
 │   ├── prepare_german_dataset.py         # German data prep (MLS + optional CV)
-│   ├── inference.py                      # Single-file and live inference
+│   ├── inference.py                      # Single-file, batch, and live inference
 │   ├── evaluate.py                       # WER/CER evaluation
 │   ├── convert_for_deployment.py         # ONNX export pipeline
-│   ├── intelligent_segmentation.py       # Whisper V3 forced-alignment segmentation
 │   ├── extract_samples.py               # Extract test samples
 │   └── checkpoint_to_dataset.py          # Create datasets from checkpoints
 ├── moonshine_ft/                         # Core fine-tuning library
-│   ├── data_loader.py
-│   ├── curriculum.py
-│   └── utils/
+│   ├── data_loader.py                    # Dataset loading (MLS/CV/local/CSV)
+│   ├── curriculum.py                     # Curriculum learning scheduler
+│   └── utils/                            # Metrics + audio preprocessing
 ├── contexts/
 │   └── moonshine_de_context.md           # Full project context & roadmap
-├── docs/                                 # Pierre's original guides (still useful)
-│   ├── TRAINING_GUIDE.md
-│   ├── INFERENCE_GUIDE.md
-│   ├── DATASET_PREPARATION.md
-│   ├── LIVE_MODE_GUIDE.md
-│   └── ONNX_MODE_GUIDE.md
-└── examples/
-    └── fine_tune_moonshine_curriculum.ipynb
+└── docs/                                 # Guides (installation, training, inference, etc.)
 ```
 
 ## Next Steps
