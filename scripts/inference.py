@@ -560,8 +560,8 @@ class LiveTranscriber:
         # VAD buffer (process in chunks of ~3 * 1536 samples)
         self.vad_buffer = np.append(self.vad_buffer, audio_flatten)
 
-        if len(self.vad_buffer) >= 1536 * 3:
-            speech_dict = self.vad_iterator(self.vad_buffer, return_seconds=True)
+        if len(self.vad_buffer) >= 512:
+            speech_dict = self.vad_iterator(self.vad_buffer[:512], return_seconds=True)
 
             if speech_dict:
                 if 'start' in speech_dict:
