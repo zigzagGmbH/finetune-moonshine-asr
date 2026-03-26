@@ -1,0 +1,101 @@
+# ============================================================
+# German Moonshine — Phase 2: Resume training from 10k steps
+# Target: WER < 25% (currently 36.7%)
+# ============================================================
+# USAGE:
+#   CUDA_VISIBLE_DEVICES=0 uv run python train.py \
+#       --config configs/german_resume_v2.yaml \
+#       --resume /data/results-moonshine-de/final
+#
+# This resumes from the 10k-step model and trains to 30k total steps.
+# Key changes from v1:
+#   - Lower learning rate (1e-4 vs 3e-4) — model already learned basics
+#   - Longer warmup (500 steps) — gentler restart
+#   - 30k total steps (~4 epochs) — loss was still dropping at 10k
+#   - More frequent eval (every 500 steps) — catch the sweet spot
+#   - Saves to /data/results-moonshine-de-v2/
+#
+# Expected timeline: ~20k new steps × ~3.5s/step ≈ ~19 hours on RTX 5090
+# (May finish faster — first run was 10k steps in 9.7h)
+
+model:
+  name: "UsefulSensors/moonshine-tiny"
+  freeze_encoder: false
+
+dataset:
+  type: "local"
+  path: "/storage/datasets/german_combined"
+  text_column: "sentence"
+
+audio:
+  sampling_rate: 16000
+  max_duration: 20.0
+  min_duration: 4.0
+
+preprocessing:
+  num_proc: 8
+  normalize_audio: true
+  target_rms: 0.075
+
+curriculum:
+  enabled: false
+
+training:
+  output_dir: "/data/results-moonshine-de-v2"
+
+  # ---- Batch (same as v1 — proven to work) ----
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 4      # effective batch = 64
+  gradient_checkpointing: false       # broken with Moonshine
+  bf16: true
+  fp16: false
+  bf16_full_eval: true
+  fp16_full_eval: false
+  group_by_length: true
+  length_column_name: "input_length"
+  max_grad_norm: 1.0
+
+  # ---- Training length ----
+  # Resume from 10k → train to 30k total (~4 epochs)
+  # Loss was 1.61 and still slowly dropping at 10k
+  max_steps: 30000
+
+  # ---- Optimizer ----
+  # Lower LR for continued training — model already has German basics
+  # Schedule-free AdamW adapts automatically, but starting lower helps
+  optim: "schedule_free_adamw"
+  learning_rate: 1.0e-4               # v1 was 3e-4 — reduce for fine-tuning phase
+  lr_scheduler_type: "constant_with_warmup"
+  warmup_steps: 500                   # Gentle restart after loading checkpoint
+
+  # ---- Evaluation & saving ----
+  eval_strategy: "steps"
+  eval_steps: 500                     # More frequent than v1 (was 1000)
+  save_steps: 1000                    # Save every 1k steps
+  logging_steps: 50
+  predict_with_generate: true
+
+  # ---- Best model selection ----
+  load_best_model_at_end: true
+  metric_for_best_model: "wer"
+  greater_is_better: false
+
+  # ---- Logging ----
+  report_to: ["tensorboard"]
+  logging_dir: "/data/logs/moonshine-de-v2"
+
+  # ---- Hub ----
+  push_to_hub: false
+  hub_model_id: null
+  hub_strategy: "every_save"
+  hub_token: null
+
+generation:
+  max_new_tokens: 80
+  length_penalty: 1.2
+  do_sample: false
+  early_stopping: true
+  repetition_penalty: 1.3
+  num_beams: 5
+  no_repeat_ngram_size: 2
