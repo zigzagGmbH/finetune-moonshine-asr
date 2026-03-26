@@ -1,457 +1,156 @@
-# Moonshine ASR Fine-Tuning Guide
+# Moonshine-Tiny-DE: German ASR Fine-Tuning
 
-A comprehensive guide and toolkit for fine-tuning the [Moonshine ASR model](https://github.com/usefulsensors/moonshine) for custom languages and domains.
+Fine-tuning [UsefulSensors/moonshine-tiny](https://huggingface.co/UsefulSensors/moonshine-tiny) (27M params) for **German automatic speech recognition**, built on [Pierre Chéneau's fine-tuning toolkit](https://github.com/pierre-cheneau/finetune-moonshine-asr).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![HuggingFace Model](https://img.shields.io/badge/🤗-Model%20Card-yellow)](https://huggingface.co/Cornebidouil/moonshine-tiny-fr)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![HuggingFace Model](https://img.shields.io/badge/🤗-moonshine--tiny--de-yellow)](https://huggingface.co/dattazigzag/moonshine-tiny-de)
 
-## 🎯 Overview
+## Overview
 
-This repository provides everything you need to fine-tune Moonshine, a lightweight and efficient automatic speech recognition (ASR) model with only 27M parameters, achieving performance comparable to much larger models.
+This is a fork of [pierre-cheneau/finetune-moonshine-asr](https://github.com/pierre-cheneau/finetune-moonshine-asr) adapted for **German language** fine-tuning on an NVIDIA RTX 5090. The original toolkit provides curriculum learning, schedule-free optimization, and production-ready inference scripts for Moonshine ASR.
 
-**What you'll learn:**
-- ✅ How to prepare your dataset for fine-tuning
-- ✅ Training with curriculum learning and schedule-free optimization
-- ✅ Intelligent audio segmentation for better data quality
-- ✅ Evaluation and inference with production-ready scripts
-- ✅ Live transcription with Voice Activity Detection
-- ✅ ONNX export for 10-30% faster inference
-- ✅ Complete deployment pipeline
+**Our contribution:** a German fine-tuning pipeline using MLS German data, RTX 5090-optimized config, and patches for bf16 training + dual-GPU compatibility issues.
 
-## 🎤 Pre-trained Model Available
-
-**[moonshine-tiny-fr](https://huggingface.co/Cornebidouil/moonshine-tiny-fr)** - Fine-tuned French ASR model ready to use!
-
-Fine-tuned using this guide on the Multilingual LibriSpeech French dataset:
-- **WER**: 21.8% on test set
-- **Model Size**: Only 27M parameters
-- **Inference Speed**: RTF 0.11x (9x faster than real-time on CPU)
-- **Training**: 8,000 steps with curriculum learning
-
-Try it now:
-```python
-from transformers import pipeline
-
-transcriber = pipeline("automatic-speech-recognition", model="Cornebidouil/moonshine-tiny-fr")
-result = transcriber("french_audio.wav")
-print(result['text'])
-```
-
-**[➡️ View Model Card on HuggingFace](https://huggingface.co/Cornebidouil/moonshine-tiny-fr)**
-
-## 🚀 Quick Start
-
-### Option 1: Use Pre-trained French Model (Fastest)
-
-```bash
-# Install dependencies
-pip install transformers torch torchaudio
-
-# Use the model
-python
->>> from transformers import pipeline
->>> transcriber = pipeline("automatic-speech-recognition", model="Cornebidouil/moonshine-tiny-fr")
->>> result = transcriber("your_french_audio.wav")
->>> print(result['text'])
-```
-
-**[📥 Download Model](https://huggingface.co/Cornebidouil/moonshine-tiny-fr)**
-
-### Option 2: Fine-Tune Your Own Model
-
-```bash
-# Clone the repository
-git clone https://github.com/pierre-cheneau/finetune-moonshine-asr.git
-cd finetune-moonshine-asr
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Optional: Live transcription support
-pip install -r requirements-live.txt
-```
-
-### Fine-Tune Your First Model
-
-```bash
-# 1. Prepare your dataset (HuggingFace dataset format)
-python scripts/intelligent_segmentation.py \
-    --dataset facebook/multilingual_librispeech \
-    --language french \
-    --output ./data/mls_french_segmented
-
-# 2. Train the model
-python train.py --config configs/mls_french_no_curriculum.yaml
-
-# 3. Evaluate on test set
-python scripts/evaluate.py \
-    --model results-moonshine-fr/checkpoint-6000 \
-    --dataset ./data/test \
-    --split test
-
-# 4. Run inference
-python scripts/inference.py \
-    --model results-moonshine-fr/checkpoint-6000 \
-    --audio sample.wav
-```
-
-## 🌟 Example: Fine-Tuned French Model
-
-This guide was used to create **[moonshine-tiny-fr](https://huggingface.co/Cornebidouil/moonshine-tiny-fr)**, a production-ready French ASR model.
-
-### Model Performance
+### Results
 
 | Metric | Value |
 |--------|-------|
-| **Word Error Rate (WER)** | 21.8% |
-| **Character Error Rate (CER)** | ~10% |
-| **Inference Speed (CPU)** | 9x faster than real-time |
-| **Model Size** | 27M parameters |
-| **Training Time** | ~24 hours on single GPU |
+| **WER** | 36.7% on MLS German test set |
+| **Model size** | 27M parameters (~200 MB) |
+| **Training data** | MLS German — 469,942 samples (~1,967 hours) |
+| **Training time** | ~9.7 hours on single RTX 5090 |
+| **Training steps** | 10,000 (schedule-free AdamW, bf16) |
 
-### Using the Model
+For reference: Pierre achieved 21.8% WER on French with 60k samples at 8k steps using curriculum learning. Our first run used 8× more data but no curriculum — there's room to improve.
 
-**Basic Transcription:**
+## Pre-trained German Model
+
+**[dattazigzag/moonshine-tiny-de](https://huggingface.co/dattazigzag/moonshine-tiny-de)** — ready to use:
+
 ```python
 from transformers import pipeline
 
-transcriber = pipeline("automatic-speech-recognition", model="Cornebidouil/moonshine-tiny-fr")
-result = transcriber("french_audio.wav")
-print(result['text'])
+transcriber = pipeline("automatic-speech-recognition", model="dattazigzag/moonshine-tiny-de")
+result = transcriber("german_audio.wav")
+print(result["text"])
 ```
 
-**Batch Processing:**
-```python
-from pathlib import Path
+## Quick Start: Fine-Tune Your Own
 
-audio_files = Path("./audio").glob("*.wav")
-for audio in audio_files:
-    result = transcriber(str(audio))
-    print(f"{audio.name}: {result['text']}")
-```
-
-**Live Transcription:**
 ```bash
-# Clone this repo and use inference.py
-python scripts/inference.py --model Cornebidouil/moonshine-tiny-fr --live
+# Clone
+git clone https://github.com/zigzagGmbH/finetune-moonshine-asr.git
+cd finetune-moonshine-asr
+
+# Install dependencies (uses uv)
+uv sync
+
+# Prepare dataset (MLS German, ~1.1 TB decoded)
+uv run python scripts/prepare_german_dataset.py \
+    --output /path/to/german_combined \
+    --skip-cv
+
+# Train (single GPU, bf16)
+CUDA_VISIBLE_DEVICES=0 uv run python train.py \
+    --config configs/mls_cv_german_no_curriculum.yaml
 ```
 
-**[📖 Full Model Documentation](https://huggingface.co/Cornebidouil/moonshine-tiny-fr)**
+## What Changed from Pierre's Original
 
-## 📚 Documentation
+### New files
+- `scripts/prepare_german_dataset.py` — MLS German data preparation pipeline
+- `configs/mls_cv_german_no_curriculum.yaml` — RTX 5090 training config (bf16, batch 16)
+- `contexts/moonshine_de_context.md` — full project context, gotchas, and roadmap
 
-### Getting Started
-- [Installation Guide](docs/INSTALLATION.md) - Complete setup instructions
-- [Training Guide](docs/TRAINING_GUIDE.md) - Step-by-step training tutorial
-- [Dataset Preparation](docs/DATASET_PREPARATION.md) - Prepare your audio data
+### Patches to `train.py`
+- Safe config key access: `train_config.get("fp16", False)` / `train_config.get("bf16", False)` (Pierre's original hardcoded `train_config['fp16']`)
+- bf16 training support alongside fp16
 
-### Advanced Features
-- [Inference Guide](docs/INFERENCE_GUIDE.md) - Single file, batch, and live inference
-- [Live Transcription](docs/LIVE_MODE_GUIDE.md) - Real-time transcription with VAD
-- [ONNX Runtime](docs/ONNX_MODE_GUIDE.md) - 10-30% faster inference
+### Key gotchas documented
+- **`gradient_checkpointing` is broken** for Moonshine in transformers 4.49 (`bool` vs dict `is_updated` error) — set to `false`
+- **Dual GPU / DataParallel is broken** for Moonshine KV cache — always use `CUDA_VISIBLE_DEVICES=0`
+- **`datasets >= 4.0` breaks audio decoding** (switches to torchcodec) — pinned `< 4.0`
+- **`transformers >= 4.50` removes training params** — pinned `< 4.50`
+- **Common Voice pulled from HuggingFace** (Oct 2025) — use `--skip-cv` flag
 
-## 🛠️ Scripts
+Full details in [`contexts/moonshine_de_context.md`](contexts/moonshine_de_context.md).
 
-### Core Scripts
+## Pinned Dependencies
 
-| Script | Purpose |
-|--------|---------|
-| `train.py` | Main training script with curriculum learning |
-| `scripts/inference.py` | Production inference (batch, live, ONNX) |
-| `scripts/evaluate.py` | WER/CER evaluation on test sets |
-| `scripts/convert_for_deployment.py` | Complete deployment pipeline |
+These versions are tested and working. Do not upgrade without testing:
 
-### Utility Scripts
+```
+datasets >= 2.14.0, < 4.0.0
+transformers >= 4.35.0, < 4.50.0
+torch >= 2.0.0  (tested with 2.11.0+cu130)
+```
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/intelligent_segmentation.py` | Segment long audio with forced alignment |
-| `scripts/extract_samples.py` | Extract test samples from datasets |
-| `scripts/checkpoint_to_dataset.py` | Create datasets from training checkpoints |
+See `pyproject.toml` for the full list.
 
-## 📦 Repository Structure
+## Repository Structure
 
 ```
 finetune-moonshine-asr/
-├── README.md                   # This file
-├── requirements.txt            # Python dependencies
-├── requirements-live.txt       # Optional live mode dependencies
-├── train.py                    # Main training script
-│
-├── docs/                       # Documentation
-│   ├── INSTALLATION.md
+├── train.py                              # Main training script (patched for bf16)
+├── configs/
+│   ├── mls_cv_german_no_curriculum.yaml  # German RTX 5090 config
+│   └── example_config.yaml              # Reference config with all options
+├── scripts/
+│   ├── prepare_german_dataset.py         # German data prep (MLS + optional CV)
+│   ├── inference.py                      # Single-file and live inference
+│   ├── evaluate.py                       # WER/CER evaluation
+│   ├── convert_for_deployment.py         # ONNX export pipeline
+│   ├── intelligent_segmentation.py       # Whisper V3 forced-alignment segmentation
+│   ├── extract_samples.py               # Extract test samples
+│   └── checkpoint_to_dataset.py          # Create datasets from checkpoints
+├── moonshine_ft/                         # Core fine-tuning library
+│   ├── data_loader.py
+│   ├── curriculum.py
+│   └── utils/
+├── contexts/
+│   └── moonshine_de_context.md           # Full project context & roadmap
+├── docs/                                 # Pierre's original guides (still useful)
 │   ├── TRAINING_GUIDE.md
 │   ├── INFERENCE_GUIDE.md
+│   ├── DATASET_PREPARATION.md
 │   ├── LIVE_MODE_GUIDE.md
 │   └── ONNX_MODE_GUIDE.md
-│
-├── scripts/                    # Utility scripts
-│   ├── inference.py
-│   ├── evaluate.py
-│   ├── convert_for_deployment.py
-│   ├── intelligent_segmentation.py
-│   └── extract_samples.py
-│
-├── configs/                    # Training configurations
-│   ├── mls_french_no_curriculum.yaml
-│   └── example_curriculum.yaml
-│
-├── examples/                   # Example notebooks
-│   └── fine_tune_moonshine_curriculum.ipynb
-│
-└── moonshine_ft/              # Fine-tuning library
-    ├── __init__.py
-    ├── data_loader.py
-    ├── trainer.py
-    └── configs/
+└── examples/
+    └── fine_tune_moonshine_curriculum.ipynb
 ```
 
-## 🎓 Tutorial: Fine-Tune for French
+## Next Steps
 
-### Step 1: Install Dependencies
+- [ ] Improve WER: resume training (20k steps), add curriculum learning
+- [ ] Add more data sources: SWC (~386h), VoxPopuli DE (~282h), Bundestag (~600h)
+- [ ] ONNX/ORT export for native `moonshine-voice` CLI integration
+- [ ] Test with real-world German audio (conversational, accented, noisy)
+- [ ] Post results to [moonshine#141](https://github.com/moonshine-ai/moonshine/issues/141)
 
-```bash
-pip install -r requirements.txt
+## Acknowledgments
+
+- **[Pierre Chéneau](https://github.com/pierre-cheneau/finetune-moonshine-asr)** — original fine-tuning toolkit and French model ([moonshine-tiny-fr](https://huggingface.co/Cornebidouil/moonshine-tiny-fr), 21.8% WER)
+- **[Moonshine AI / Useful Sensors](https://github.com/moonshine-ai/moonshine)** — base model and architecture
+- **[German language support community](https://github.com/moonshine-ai/moonshine/issues/141)** — dataset recommendations and discussion
+
+## License
+
+MIT — same as Pierre's original. See [LICENSE](LICENSE).
+
+## Citation
+
+```bibtex
+@misc{datta2026moonshine-tiny-de,
+  author = {Saurabh Datta},
+  title = {Moonshine-Tiny-DE: Fine-tuned German Speech Recognition},
+  year = {2026},
+  publisher = {HuggingFace},
+  url = {https://huggingface.co/dattazigzag/moonshine-tiny-de}
+}
 ```
 
-### Step 2: Prepare Dataset
-
-```bash
-# Option A: Use intelligent segmentation (recommended)
-python scripts/intelligent_segmentation.py \
-    --dataset facebook/multilingual_librispeech \
-    --language french \
-    --output ./data/mls_french_segmented \
-    --max-duration 10.0 \
-    --min-duration 1.0
-
-# Option B: Use pre-segmented dataset
-# Just specify the dataset in your config file
-```
-
-### Step 3: Configure Training
-
-Create or edit `configs/my_french_model.yaml`:
-
-```yaml
-# Dataset configuration
-dataset:
-  name: "facebook/multilingual_librispeech"
-  language: "french"
-  train_split: "train"
-  test_split: "test"
-
-# Training configuration
-training:
-  output_dir: "./results-moonshine-fr"
-  num_train_epochs: 3
-  per_device_train_batch_size: 16
-  learning_rate: 5e-5
-  warmup_steps: 500
-
-# Model configuration
-model:
-  name: "UsefulSensors/moonshine-tiny"
-
-# Optimizer
-optimizer:
-  type: "schedulefree_adamw"
-  betas: [0.9, 0.999]
-  weight_decay: 0.01
-```
-
-### Step 4: Train
-
-```bash
-python train.py --config configs/my_french_model.yaml
-```
-
-Monitor with TensorBoard:
-```bash
-tensorboard --logdir results-moonshine-fr/runs
-```
-
-### Step 5: Evaluate
-
-```bash
-python scripts/evaluate.py \
-    --model results-moonshine-fr/checkpoint-best \
-    --dataset facebook/multilingual_librispeech \
-    --language french \
-    --split test
-```
-
-### Step 6: Inference
-
-```bash
-# Single file
-python scripts/inference.py \
-    --model results-moonshine-fr/checkpoint-best \
-    --audio my_audio.wav
-
-# Live transcription
-python scripts/inference.py \
-    --model results-moonshine-fr/checkpoint-best \
-    --live
-
-# ONNX (faster)
-python scripts/convert_for_deployment.py \
-    --model results-moonshine-fr/checkpoint-best \
-    --output moonshine-fr-onnx
-
-python scripts/inference.py \
-    --model moonshine-fr-onnx/onnx \
-    --audio my_audio.wav \
-    --use-manual-onnx
-```
-
-## 🔬 Advanced Features
-
-### Curriculum Learning
-
-Train with progressive difficulty for better convergence:
-
-```yaml
-curriculum:
-  enabled: true
-  stages:
-    - duration: 2000  # steps
-      max_audio_length: 5.0
-      description: "Short audio clips"
-
-    - duration: 3000
-      max_audio_length: 10.0
-      description: "Medium audio clips"
-
-    - duration: 3000
-      max_audio_length: 20.0
-      description: "Full-length audio"
-```
-
-### Intelligent Audio Segmentation
-
-Use Whisper V3 + forced alignment for optimal segmentation:
-
-```bash
-python scripts/intelligent_segmentation.py \
-    --dataset your/dataset \
-    --language french \
-    --output ./data/segmented \
-    --use-whisper-v3 \
-    --alignment-method "forced" \
-    --max-duration 10.0
-```
-
-### Schedule-Free Optimization
-
-Modern optimizer without learning rate schedules:
-
-```yaml
-optimizer:
-  type: "schedulefree_adamw"
-  learning_rate: 5e-5
-  betas: [0.9, 0.999]
-  weight_decay: 0.01
-  warmup_steps: 500
-```
-
-## 📈 Performance Tips
-
-### Training
-- Use curriculum learning for better convergence
-- Start with `batch_size=16`, increase if you have more GPU memory
-- Use schedule-free AdamW optimizer (no LR scheduling needed)
-- Monitor WER on validation set, save best checkpoint
-
-### Inference
-- **CPU**: Use ONNX manual mode (20-30% faster)
-- **GPU**: Use PyTorch with FP16 (fastest)
-- **Live**: Enable VAD for better segmentation
-- **Batch**: Process multiple files at once for efficiency
-
-### Deployment
-- Convert to ONNX for production
-- Use merged decoder for KV cache efficiency
-- Binary tokenizer for faster loading
-- ORT optimization for additional speedup
-
-## 🐛 Troubleshooting
-
-### Training Issues
-
-**Q: Out of memory during training**
-```bash
-# Reduce batch size
-per_device_train_batch_size: 8  # instead of 16
-
-# Or enable gradient accumulation
-gradient_accumulation_steps: 2
-```
-
-**Q: Model not converging**
-```bash
-# Try curriculum learning
-# Start with shorter audio clips
-# Increase warmup steps
-warmup_steps: 1000
-```
-
-### Inference Issues
-
-**Q: Transcriptions are truncated**
-```bash
-# Already fixed in our scripts!
-# Uses: max_new_tokens = audio_duration * 5
-```
-
-**Q: Slow inference on CPU**
-```bash
-# Use ONNX mode
-python scripts/inference.py --model model-onnx --audio audio.wav --use-manual-onnx
-```
-
-### Live Mode Issues
-
-**Q: No microphone detected**
-```bash
-# Check available devices
-python -c "import sounddevice as sd; print(sd.query_devices())"
-
-# Install sounddevice
-pip install sounddevice
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Areas for improvement:
-- [ ] Multi-language support examples
-- [ ] More curriculum learning strategies
-- [ ] Quantization support (INT8)
-- [ ] Speaker diarization integration
-- [ ] Punctuation restoration
-- [ ] Docker deployment examples
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- [Useful Sensors](https://github.com/usefulsensors) for the Moonshine model
-- [HuggingFace](https://huggingface.co/) for the Transformers library
-- [Schedule-Free Learning](https://github.com/facebookresearch/schedule_free) for the optimizer
-- [Multilingual LibriSpeech](https://www.openslr.org/94/) for training data
-
-## 📚 Citation
-
-If you use this guide or the fine-tuned model in your research, please cite:
-
-### This Fine-Tuning Guide
+Based on:
 ```bibtex
 @misc{cheneau2026moonshine-finetune,
   author = {Pierre Chéneau (Cornebidouil)},
@@ -461,52 +160,3 @@ If you use this guide or the fine-tuned model in your research, please cite:
   url = {https://github.com/pierre-cheneau/finetune-moonshine-asr}
 }
 ```
-
-### Fine-Tuned French Model
-```bibtex
-@misc{cheneau2026moonshine-tiny-fr,
-  author = {Pierre Chéneau (Cornebidouil)},
-  title = {Moonshine-Tiny-FR: Fine-tuned French Speech Recognition},
-  year = {2026},
-  publisher = {HuggingFace},
-  url = {https://huggingface.co/Cornebidouil/moonshine-tiny-fr}
-}
-```
-
-### Original Moonshine
-```bibtex
-@misc{jeffries2024moonshinespeechrecognitionlive,
-  title={Moonshine: Speech Recognition for Live Transcription and Voice Commands},
-  author={Nat Jeffries and Evan King and Manjunath Kudlur and Guy Nicholson and James Wang and Pete Warden},
-  year={2024},
-  eprint={2410.15608},
-  archivePrefix={arXiv},
-  primaryClass={cs.SD},
-  url={https://arxiv.org/abs/2410.15608}
-}
-```
-
-## 🔗 Related Resources
-
-### Our Models
-- **[moonshine-tiny-fr](https://huggingface.co/Cornebidouil/moonshine-tiny-fr)** - Fine-tuned French model (ready to use!)
-
-### Original Moonshine
-- [Moonshine Official Repo](https://github.com/usefulsensors/moonshine)
-- [Original Moonshine Paper](https://arxiv.org/abs/2410.15608)
-- [Base Model Card](https://huggingface.co/UsefulSensors/moonshine-tiny)
-
-### Datasets
-- [Multilingual LibriSpeech](https://huggingface.co/datasets/facebook/multilingual_librispeech) - Used for French training
-- [Common Voice](https://commonvoice.mozilla.org/) - Alternative dataset
-
-## Contact
-
-For questions or issues:
-- Website: [pcheneau.fr](https://pcheneau.fr)
-- Github: [@pierre-cheneau](https://github.com/pierre-cheneau)
-- HuggingFace: [@Cornebidouil](https://huggingface.co/Cornebidouil)
-- Discord: [HogwartsLegacySpellCaster](https://discord.gg/zE4NRsTGdw) (Hogwarts Legacy Spell Recognition project's discord)
----
-
-**Made with ❤️ for the ASR community**
