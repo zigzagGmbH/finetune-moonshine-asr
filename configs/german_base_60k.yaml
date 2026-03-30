@@ -7,6 +7,10 @@
 #   CUDA_VISIBLE_DEVICES=0 uv run python train.py \
 #       --config configs/german_base_60k.yaml
 #
+# PREREQ:
+#   The 60k subset must exist at /storage/datasets/german_60k/
+#   If it doesn't, recreate it — see contexts/STATUS.md for full steps.
+#
 # MATH:
 #   Dataset: 60,000 train samples (subset of MLS German)
 #   Effective batch: 16 × 4 = 64
@@ -16,10 +20,15 @@
 # ESTIMATED TIME:
 #   ~8k steps × 5-6s/step ≈ 11-13 hours on RTX 5090
 #
-# TODO:
-#   - Create 60k subset: dataset.select(range(60000)) or stratified sample
-#   - Verify batch 16 fits in VRAM (base is 2.3× larger than tiny)
-#   - If OOM, reduce to batch 12 + grad_accum 6 (effective 72)
+# STORAGE:
+#   - Source dataset: /storage/datasets/german_60k/ (~140 GB)
+#   - .map() temp cache: written next to source (~80 GB, on /storage)
+#   - Encoded cache: /data/results-moonshine-de-base-60k_encoded/ (~50-80 GB)
+#   - Checkpoints: /data/results-moonshine-de-base-60k/ (~500 MB each)
+#   Total: ~220 GB /storage + ~80 GB /data — fits comfortably.
+#
+# IF OOM:
+#   Reduce to batch 12 + grad_accum 6 (effective 72)
 #
 # GOTCHAS (same as tiny — same architecture class):
 #   - gradient_checkpointing MUST be false
@@ -33,9 +42,8 @@ model:
 
 dataset:
   type: "local"
-  path: "/storage/datasets/german_combined"
+  path: "/storage/datasets/german_60k"
   text_column: "sentence"
-  max_train_samples: 60000
 
 audio:
   sampling_rate: 16000
