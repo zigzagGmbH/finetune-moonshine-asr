@@ -1,0 +1,141 @@
+# ============================================================
+# German Moonshine — Experiment A: v1 base on 100k subset
+# ============================================================
+#
+# PURPOSE:
+#   Answer the question: "Is model size the bottleneck?"
+#   v1 tiny (27M) plateaued at 35% WER on 470k samples.
+#   v1 base (61M) has 2.3× more capacity — does it break through?
+#
+# USAGE:
+#   # First, create the 100k subset (run once):
+#   CUDA_VISIBLE_DEVICES=0 uv run python scripts/create_subset.py \
+#       --source /storage/datasets/german_combined \
+#       --output /storage/datasets/german_100k \
+#       --size 100000 --stratify-by-duration
+#
+#   # Then train:
+#   CUDA_VISIBLE_DEVICES=0 uv run python train.py \
+#       --config configs/german_base_100k.yaml --no-curriculum
+#
+# MATH:
+#   Dataset: 100,000 samples (subset of MLS German)
+#   Effective batch: 16 × 4 = 64
+#   Steps per epoch: 100,000 / 64 ≈ 1,562
+#   Target: 4 epochs → ~6,500 steps
+#
+# DECISION LOGIC:
+#   If eval WER < 28%  → model size was the bottleneck. Scale to full 470k.
+#   If eval WER 28-32% → promising but may need more data or tuning.
+#   If eval WER > 32%  → v1 architecture is the ceiling. Pivot to v2 streaming.
+#
+# ESTIMATED TIME:
+#   ~6,500 steps × 5s/step (base is ~1.4× slower than tiny) ≈ ~9 hours
+#
+# WHY 100k NOT 470k:
+#   - Keeps experiment under 10 hours (fast iteration)
+#   - 100k is ~1.6× Pierre's 60k, proportional to base having 2.3× tiny's capacity
+#   - 470k on 61M might still be too much data — test that separately
+#
+# WHY NOT STREAMING-SMALL:
+#   - Requires transformers >= 5.0 (completely different env)
+#   - 123M params → tight on 32 GB VRAM
+#   - fosple's approach not yet documented
+#   - Try the cheap experiment first
+#
+# GOTCHAS (same as before):
+#   - gradient_checkpointing MUST be false (broken with Moonshine in transformers 4.49)
+#   - MUST use CUDA_VISIBLE_DEVICES=0 (dual GPU breaks Moonshine KV cache)
+#   - datasets MUST be < 4.0 (4.x breaks audio decoding via torchcodec)
+#   - transformers MUST be < 4.50 (4.50+ removes training params)
+
+model:
+  name: "UsefulSensors/moonshine-base"   # 61M params — 2.3× tiny
+  freeze_encoder: false    # New language needs encoder adaptation
+
+dataset:
+  type: "local"
+  path: "/storage/datasets/german_100k"    # Create this subset first!
+  text_column: "sentence"
+
+audio:
+  sampling_rate: 16000
+  max_duration: 20.0       # Moonshine paper: [4, 30]s — MLS already filtered to [4, 20]s
+  min_duration: 4.0
+
+preprocessing:
+  num_proc: 8
+  normalize_audio: true
+  target_rms: 0.075
+
+curriculum:
+  enabled: false
+
+training:
+  output_dir: "/data/results-moonshine-de-base-100k"
+
+  # ---- Batch ----
+  # RTX 5090 (32 GB): base (61M) + bf16 should fit batch 16
+  # If OOM: drop to batch_size=12, gradient_accumulation_steps=6 (effective 72)
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 8       # Lower eval batch — base uses more VRAM during generate()
+  gradient_accumulation_steps: 4      # 16 × 4 = 64 effective
+  gradient_checkpointing: false       # BROKEN with Moonshine in transformers 4.49
+  bf16: true
+  fp16: false
+  bf16_full_eval: true
+  fp16_full_eval: false
+  group_by_length: true
+  length_column_name: "input_length"
+  max_grad_norm: 1.0
+
+  # ---- Training length ----
+  # 100k / 64 = 1,562 steps/epoch → 4 epochs ≈ 6,250 steps
+  # Round to 6,500 for a little headroom
+  # If WER is still improving at 6,500, extend to 10,000
+  max_steps: 6500
+
+  # ---- Optimizer ----
+  # Lower LR for larger model: 2e-4 instead of Pierre's 3e-4
+  # Schedule-free AdamW adapts automatically
+  # If loss is unstable in first 500 steps, kill and restart at 1e-4
+  optim: "schedule_free_adamw"
+  learning_rate: 2.0e-4               # Lower than tiny (3e-4) — larger models need gentler LR
+  lr_scheduler_type: "constant_with_warmup"
+  warmup_steps: 200                   # ~13% of first epoch — slightly more warmup for stability
+
+  # ---- Evaluation & saving ----
+  eval_strategy: "steps"
+  eval_steps: 1000                    # Every 1000 steps → 6-7 eval points
+  save_steps: 1000
+  logging_steps: 50
+  predict_with_generate: true
+
+  # ---- Best model selection ----
+  load_best_model_at_end: true
+  metric_for_best_model: "wer"
+  greater_is_better: false
+
+  # ---- Logging ----
+  report_to: ["tensorboard"]
+  logging_dir: "/data/logs/moonshine-de-base-100k"
+
+  # ---- Hub ----
+  push_to_hub: false
+  hub_model_id: null
+  hub_strategy: "every_save"
+  hub_token: null
+
+generation:
+  # ---- CRITICAL FIX: max_new_tokens was 80 — too low for German! ----
+  # Tokenizer analysis (2026-03-30):
+  #   German = 2.08 tokens/word average
+  #   20s audio × 3 words/sec = 60 words × 2.08 = ~125 tokens needed
+  #   Old value of 80 was CLIPPING output for longer utterances, inflating WER
+  max_new_tokens: 150                  # Headroom above 125 theoretical max
+  length_penalty: 1.0                  # Neutral — let the model decide length naturally
+  do_sample: false
+  early_stopping: true
+  repetition_penalty: 1.3
+  num_beams: 5
+  no_repeat_ngram_size: 2
